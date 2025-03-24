@@ -100,6 +100,10 @@ jpeg_image parse_jpeg(const std::vector<unsigned char>& data)
             *(reinterpret_cast<uint8_t *>(&image.width) + 1) = seg.data[5];
             *(reinterpret_cast<uint8_t *>(&image.width) + 0) = seg.data[6];
         }
+
+        if (seg.marker[1] == 0xc2) {
+            printf("Warning: Progressive JPEG may not be decoded");
+        }
     }
     printf("Image size %d x %d\n", image.width, image.height);
 
@@ -130,7 +134,8 @@ void save_decoded_image(amf::AMFDataPtr data)
     if (mem_type == amf::AMF_MEMORY_DX9) printf("memory type AMF_MEMORY_DX9\n");
     else printf("memory type %d\n", mem_type);
 
-    data->Convert(amf::AMF_MEMORY_HOST);
+    auto res = data->Convert(amf::AMF_MEMORY_HOST);
+    printf("Convert to host memory "); print(res);
     
     amf::AMFSurfacePtr surface(data);
     amf::AMFPlanePtr plane_y  = surface->GetPlane(amf::AMF_PLANE_Y);
@@ -144,6 +149,11 @@ void save_decoded_image(amf::AMFDataPtr data)
     std::vector<uint8_t> img_nv12(width * height * 3 / 2);
     copy_plane(plane_y , img_nv12.data());
     copy_plane(plane_uv, img_nv12.data() + width * height);
+
+    // Check output
+    bool all_zero = true;
+    for (auto& p : img_nv12) if (p != 0) all_zero = false;
+    if (all_zero) printf("Output image is all zero!\n");
 
     // Save to a file
     std::ofstream ofs("output.nv12", std::ios::binary);
@@ -208,7 +218,8 @@ int main(int argc, char** argv)
 
     // Allocate buffer
     auto image_size = image.eoi_offset + 2;
-    context->AllocBuffer(amf::AMF_MEMORY_HOST, image_size, &buffer);
+    res = context->AllocBuffer(amf::AMF_MEMORY_HOST, image_size, &buffer);
+    printf("Allocated %zd bytes buffer : ", image_size); print(res);
     // Copy JPEG data
     memcpy(buffer->GetNative(), filedata.data(), image_size);
 
@@ -216,8 +227,6 @@ int main(int argc, char** argv)
     res = component->SubmitInput(buffer.Detach());
     printf("AMF SubmitInput returned "); print(res);
     if (res != AMF_OK) goto terminate;
-
-    std::this_thread::sleep_for(std::chrono::seconds(3));
 
     // Query output
     res = component->QueryOutput(&data);

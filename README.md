@@ -87,6 +87,9 @@ The NV12 format consists of a full-resolution Y (luma) plane followed by interle
 - The sample code includes error checking and capability querying to ensure compatibility with your hardware.
 - The decoded output is in NV12 format, which is commonly used in video processing but requires conversion for viewing as a standard image.
 - The code demonstrates basic AMF usage patterns that can be adapted for more complex applications.
+- **Limitations**:
+  - Progressive JPEG files are not supported and cannot be decoded with this sample.
+  - Only YUV420 pixel format is supported. JPEGs with other pixel formats cannot be decoded.
 
 ## License
 
