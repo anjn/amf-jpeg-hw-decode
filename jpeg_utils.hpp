@@ -29,13 +29,46 @@
  * Reference: https://github.com/corkami/formats/blob/master/image/jpeg.md
  */
 
-// Debug output control
-// #define DEBUG_JPEG
+// Log level control
+// Set JPEG_LOGLEVEL to control verbosity:
+// -1: No logging
+//  0: ERROR only
+//  1: ERROR + WARNING
+//  2: ERROR + WARNING + INFO
+//  3: ERROR + WARNING + INFO + DEBUG (all messages)
+#ifndef JPEG_LOGLEVEL
+#define JPEG_LOGLEVEL 3
+#endif
 
-#ifdef DEBUG_JPEG
-#define JPEG_LOG(msg, ...) std::printf(msg, ##__VA_ARGS__)
+// Log level constants
+#define JPEG_LOGLEVEL_ERROR   0
+#define JPEG_LOGLEVEL_WARNING 1
+#define JPEG_LOGLEVEL_INFO    2
+#define JPEG_LOGLEVEL_DEBUG   3
+
+// Level-specific log macros
+#if JPEG_LOGLEVEL >= JPEG_LOGLEVEL_ERROR
+#define JPEG_ERROR(msg, ...) std::printf("[ERROR] " msg, ##__VA_ARGS__)
 #else
-#define JPEG_LOG(msg, ...) ((void)0)
+#define JPEG_ERROR(msg, ...) ((void)0)
+#endif
+
+#if JPEG_LOGLEVEL >= JPEG_LOGLEVEL_WARNING
+#define JPEG_WARNING(msg, ...) std::printf("[WARNING] " msg, ##__VA_ARGS__)
+#else
+#define JPEG_WARNING(msg, ...) ((void)0)
+#endif
+
+#if JPEG_LOGLEVEL >= JPEG_LOGLEVEL_INFO
+#define JPEG_INFO(msg, ...) std::printf("[INFO] " msg, ##__VA_ARGS__)
+#else
+#define JPEG_INFO(msg, ...) ((void)0)
+#endif
+
+#if JPEG_LOGLEVEL >= JPEG_LOGLEVEL_DEBUG
+#define JPEG_DEBUG(msg, ...) std::printf("[DEBUG] " msg, ##__VA_ARGS__)
+#else
+#define JPEG_DEBUG(msg, ...) ((void)0)
 #endif
 
 /**
@@ -128,8 +161,8 @@ auto parse_jpeg_segment(const std::vector<unsigned char>& data, const Iterator& 
         }
     }
 
-    JPEG_LOG("Marker %02x %02x\n", segment.marker[0], segment.marker[1]);
-    JPEG_LOG("  Length %d\n", segment.length);
+    JPEG_DEBUG("Marker %02x %02x\n", segment.marker[0], segment.marker[1]);
+    JPEG_DEBUG("  Length %d\n", segment.length);
 
     return std::make_tuple(segment, it + 2 + segment.length);
 }
@@ -188,7 +221,7 @@ jpeg_image parse_jpeg(const std::vector<unsigned char>& data)
     // Find EOI (End Of Image)
     if (auto it = find_marker(data, from, jpeg_utils::markers::EOI); it != data.end()) {
         image.eoi_offset = std::distance(data.begin(), it);
-        JPEG_LOG("EOI offset %lld\n", image.eoi_offset);
+        JPEG_DEBUG("EOI offset %lld\n", image.eoi_offset);
     } else {
         throw std::runtime_error("Couldn't find EOI marker!");
     }
@@ -200,8 +233,8 @@ jpeg_image parse_jpeg(const std::vector<unsigned char>& data)
         if (seg.marker[1] == jpeg_utils::markers::SOF0 || 
             seg.marker[1] == jpeg_utils::markers::SOF2) {
             
-            JPEG_LOG("Segment %02x %02x : ", seg.marker[0], seg.marker[1]);
-            #ifdef DEBUG_JPEG
+            JPEG_DEBUG("Segment %02x %02x : ", seg.marker[0], seg.marker[1]);
+            #if JPEG_LOGLEVEL >= JPEG_LOGLEVEL_DEBUG
             for (size_t i = 0; i < seg.data.size(); i++) {
                 std::printf("%02x ", seg.data[i]);
             }
@@ -214,11 +247,11 @@ jpeg_image parse_jpeg(const std::vector<unsigned char>& data)
         }
 
         if (seg.marker[1] == jpeg_utils::markers::SOF2) {
-            JPEG_LOG("Warning: Progressive JPEG may not be decoded\n");
+            JPEG_WARNING("Progressive JPEG may not be decoded\n");
         }
     }
     
-    JPEG_LOG("Image size %d x %d\n", image.width, image.height);
+    JPEG_INFO("Image size %d x %d\n", image.width, image.height);
 
     return image;
 }
