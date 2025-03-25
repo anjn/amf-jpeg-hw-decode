@@ -7,7 +7,7 @@ set(AMF_SDK_DIR ../AMF)
 
 add_executable(
     ${CMAKE_PROJECT_NAME}
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/test.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/test.cpp
     ${AMF_SDK_DIR}/amf/public/common/AMFFactory.cpp
     ${AMF_SDK_DIR}/amf/public/common/AMFSTL.cpp
     ${AMF_SDK_DIR}/amf/public/common/DataStreamFactory.cpp
@@ -20,7 +20,6 @@ add_executable(
 
 target_include_directories(
     ${CMAKE_PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${AMF_SDK_DIR}/amf
 )
 
