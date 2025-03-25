@@ -4,10 +4,7 @@ project(test)
 set(CMAKE_CXX_STANDARD 17)
 
 set(AMF_SDK_DIR ../AMF)
-
-add_executable(
-    ${CMAKE_PROJECT_NAME}
-    ${CMAKE_CURRENT_SOURCE_DIR}/test.cpp
+set(AMF_SDK_SOURCES
     ${AMF_SDK_DIR}/amf/public/common/AMFFactory.cpp
     ${AMF_SDK_DIR}/amf/public/common/AMFSTL.cpp
     ${AMF_SDK_DIR}/amf/public/common/DataStreamFactory.cpp
@@ -18,16 +15,22 @@ add_executable(
     ${AMF_SDK_DIR}/amf/public/common/Windows/ThreadWindows.cpp
 )
 
-target_include_directories(
-    ${CMAKE_PROJECT_NAME} PRIVATE
-    ${AMF_SDK_DIR}/amf
-)
+set(TARGETS test benchmark)
 
-target_link_libraries(
-    ${CMAKE_PROJECT_NAME}
-)
+foreach(TARGET ${TARGETS})
+    add_executable(
+        ${TARGET}
+        ${CMAKE_CURRENT_SOURCE_DIR}/${TARGET}.cpp
+        ${AMF_SDK_SOURCES}
+    )
+
+    target_include_directories(
+        ${TARGET} PRIVATE
+        ${AMF_SDK_DIR}/amf
+    )
+endforeach(TARGET)
 
 install(
-    TARGETS ${CMAKE_PROJECT_NAME}
+    TARGETS ${TARGETS}
     RUNTIME DESTINATION bin
 )
