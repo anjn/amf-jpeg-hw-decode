@@ -105,7 +105,12 @@ int main(int argc, char** argv)
     }
 
     // Parse JPEG
-    jpeg_image image = parse_jpeg(filedata);
+    jpeg_image image;
+    try {
+        image = jpeg_image::parse(filedata);
+    } catch (const std::exception &e) {
+        wprintf(L"Failed to parse JPEG file : %hs\n", e.what()); return 1;
+    }
 
     if (image.width == 0 || image.height == 0) {
         wprintf(L"Failed to detect image size\n"); return 1;

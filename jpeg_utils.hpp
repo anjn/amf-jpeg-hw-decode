@@ -72,49 +72,29 @@
 #endif
 
 /**
- * Helper functions for byte order handling
+ * Helper functions
  */
 namespace jpeg_utils {
-    /**
-     * Read a 16-bit big-endian value from a byte array
-     * 
-     * @param data Pointer to the data
-     * @return The value in host byte order
-     */
-    template<typename T>
-    inline T read_be16(const unsigned char* data) {
-        return static_cast<T>((data[0] << 8) | data[1]);
-    }
-
-    /**
-     * JPEG marker constants
-     */
-    namespace markers {
-        constexpr unsigned char SOI = 0xD8;  // Start Of Image
-        constexpr unsigned char EOI = 0xD9;  // End Of Image
-        constexpr unsigned char SOF0 = 0xC0; // Start Of Frame (Baseline DCT)
-        constexpr unsigned char SOF2 = 0xC2; // Start Of Frame (Progressive DCT)
-    }
+/**
+ * Read a 16-bit big-endian value from a byte array
+ * 
+ * @param data Pointer to the data
+ * @return The value in host byte order
+ */
+template<typename T>
+inline T read_be16(const unsigned char* data) {
+    return static_cast<T>((data[0] << 8) | data[1]);
 }
 
 /**
- * Structure representing a JPEG image and its components
+ * JPEG marker constants
  */
-struct jpeg_image {
-    /**
-     * Structure representing a JPEG segment
-     */
-    struct segment {
-        unsigned char marker[2];  // Marker bytes (first byte is always 0xFF)
-        uint16_t length;          // Segment length (including these 2 bytes)
-        std::vector<unsigned char> data; // Segment data
-    };
-    
-    std::vector<segment> segments; // All segments in the JPEG
-    std::size_t data_offset;       // Offset to the image data
-    std::size_t eoi_offset;        // Offset to the End Of Image marker
-    uint16_t width, height;        // Image dimensions
-};
+namespace markers {
+    constexpr unsigned char SOI = 0xD8;  // Start Of Image
+    constexpr unsigned char EOI = 0xD9;  // End Of Image
+    constexpr unsigned char SOF0 = 0xC0; // Start Of Frame (Baseline DCT)
+    constexpr unsigned char SOF2 = 0xC2; // Start Of Frame (Progressive DCT)
+}
 
 /**
  * Find a specific marker in JPEG data
@@ -167,91 +147,91 @@ auto parse_jpeg_segment(const std::vector<unsigned char>& data, const Iterator& 
     return std::make_tuple(segment, it + 2 + segment.length);
 }
 
-/**
- * Extract image dimensions from a SOF segment
- * 
- * @param segment The segment to extract dimensions from
- * @return Pair containing width and height
- */
-std::pair<uint16_t, uint16_t> extract_image_dimensions(const jpeg_image::segment& segment) {
-    if (segment.marker[1] != jpeg_utils::markers::SOF0 && 
-        segment.marker[1] != jpeg_utils::markers::SOF2) {
-        return {0, 0};
-    }
-    
-    if (segment.data.size() < 5) {
-        return {0, 0}; // Not enough data
-    }
-    
-    uint16_t height = jpeg_utils::read_be16<uint16_t>(&segment.data[1]);
-    uint16_t width = jpeg_utils::read_be16<uint16_t>(&segment.data[3]);
-    
-    return {width, height};
-}
+} // namespace jpeg_utils
 
 /**
- * Parse a JPEG file
- * 
- * @param data The JPEG file data
- * @return Parsed JPEG image structure
- * @throws std::runtime_error if the file is not a valid JPEG
+ * Structure representing a JPEG image and its components
  */
-jpeg_image parse_jpeg(const std::vector<unsigned char>& data)
-{
-    jpeg_image image;
+struct jpeg_image {
+    /**
+     * Structure representing a JPEG segment
+     */
+    struct segment {
+        unsigned char marker[2];  // Marker bytes (first byte is always 0xFF)
+        uint16_t length;          // Segment length (including these 2 bytes)
+        std::vector<unsigned char> data; // Segment data
+    };
+    
+    std::vector<segment> segments; // All segments in the JPEG
+    std::size_t data_offset;       // Offset to the image data
+    std::size_t eoi_offset;        // Offset to the End Of Image marker
+    uint16_t width, height;        // Image dimensions
 
-    // Check SOI (Start Of Image)
-    if (auto it = find_marker(data, data.begin(), jpeg_utils::markers::SOI); it != data.begin()) {
-        throw std::runtime_error("This is not a JPEG file!");
-    }
+    /**
+     * Parse a JPEG file
+     * 
+     * @param data The JPEG file data
+     * @throws std::runtime_error if the file is not a valid JPEG
+     */
+    static jpeg_image parse(const std::vector<unsigned char>& data)
+    {
+        jpeg_image image;
 
-    // Parse all segments
-    auto from = data.begin();
-    while (true) {
-        auto [segment, next_it] = parse_jpeg_segment(data, from);
-        if (next_it != from) {
-            image.segments.push_back(segment);
-            from = next_it;
-        } else {
-            image.data_offset = std::distance(data.begin(), from);
-            break;
+        // Check SOI (Start Of Image)
+        if (auto it = jpeg_utils::find_marker(data, data.begin(), jpeg_utils::markers::SOI); it != data.begin()) {
+            throw std::runtime_error("This is not a JPEG file!");
         }
-    }
 
-    // Find EOI (End Of Image)
-    if (auto it = find_marker(data, from, jpeg_utils::markers::EOI); it != data.end()) {
-        image.eoi_offset = std::distance(data.begin(), it);
-        JPEG_DEBUG("EOI offset %lld\n", image.eoi_offset);
-    } else {
-        throw std::runtime_error("Couldn't find EOI marker!");
-    }
-
-    // Get image size from SOF segments
-    image.width = image.height = 0;
-    for (const auto& seg : image.segments) {
-        // Find Start Of Frame segments
-        if (seg.marker[1] == jpeg_utils::markers::SOF0 || 
-            seg.marker[1] == jpeg_utils::markers::SOF2) {
-            
-            JPEG_DEBUG("Segment %02x %02x : ", seg.marker[0], seg.marker[1]);
-            #if JPEG_LOGLEVEL >= JPEG_LOGLEVEL_DEBUG
-            for (size_t i = 0; i < seg.data.size(); i++) {
-                std::printf("%02x ", seg.data[i]);
+        // Parse all segments
+        auto from = data.begin();
+        while (true) {
+            auto [segment, next_it] = jpeg_utils::parse_jpeg_segment(data, from);
+            if (next_it != from) {
+                image.segments.push_back(segment);
+                from = next_it;
+            } else {
+                image.data_offset = std::distance(data.begin(), from);
+                break;
             }
-            std::printf("\n");
-            #endif
-            
-            auto [width, height] = extract_image_dimensions(seg);
-            image.width = width;
-            image.height = height;
         }
 
-        if (seg.marker[1] == jpeg_utils::markers::SOF2) {
-            JPEG_WARNING("Progressive JPEG may not be decoded\n");
+        // Find EOI (End Of Image)
+        if (auto it = jpeg_utils::find_marker(data, from, jpeg_utils::markers::EOI); it != data.end()) {
+            image.eoi_offset = std::distance(data.begin(), it);
+            JPEG_DEBUG("EOI offset %lld\n", image.eoi_offset);
+        } else {
+            throw std::runtime_error("Couldn't find EOI marker!");
         }
+
+        // Get image size from SOF segments
+        image.width = image.height = 0;
+        for (const auto& seg : image.segments) {
+            // Find Start Of Frame segments
+            if (seg.marker[1] == jpeg_utils::markers::SOF0 || 
+                seg.marker[1] == jpeg_utils::markers::SOF2) {
+                
+                JPEG_DEBUG("Segment %02x %02x : ", seg.marker[0], seg.marker[1]);
+                #if JPEG_LOGLEVEL >= JPEG_LOGLEVEL_DEBUG
+                for (size_t i = 0; i < seg.data.size(); i++) {
+                    std::printf("%02x ", seg.data[i]);
+                }
+                std::printf("\n");
+                #endif
+
+                if (seg.data.size() >= 5) {
+                    image.height = jpeg_utils::read_be16<uint16_t>(&seg.data[1]);
+                    image.width = jpeg_utils::read_be16<uint16_t>(&seg.data[3]);
+                }
+            }
+
+            if (seg.marker[1] == jpeg_utils::markers::SOF2) {
+                JPEG_WARNING("Progressive JPEG may not be decoded\n");
+            }
+        }
+        
+        JPEG_INFO("Image size %d x %d\n", image.width, image.height);
+
+        return image;
     }
-    
-    JPEG_INFO("Image size %d x %d\n", image.width, image.height);
 
-    return image;
-}
+};
