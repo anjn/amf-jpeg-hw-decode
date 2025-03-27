@@ -23,6 +23,7 @@ struct jpeg_image {
     std::size_t data_offset;
     std::size_t eoi_offset;
     uint16_t width, height;
+    uint8_t num_components;
 };
 
 template<typename Iterator>
@@ -46,8 +47,7 @@ auto parse_jpeg_segment(const std::vector<unsigned char>& data, const Iterator& 
         segment.length = 0;
         break;
     default:
-        *(reinterpret_cast<uint8_t *>(&segment.length) + 1) = *(it + 2);
-        *(reinterpret_cast<uint8_t *>(&segment.length) + 0) = *(it + 3);
+        segment.length = (*(it + 2) << 8) | *(it + 3);
         segment.data.resize(segment.length);
         memcpy(segment.data.data(), data.data() + std::distance(data.begin(), it + 2), segment.length);
     }
@@ -88,24 +88,23 @@ jpeg_image parse_jpeg(const std::vector<unsigned char>& data)
     }
 
     // Get image size
-    image.width = image.height = 0;
+    image.width = image.height = image.num_components = 0;
     for (auto& seg : image.segments) {
         // Find Start Of Frame
         if (seg.marker[1] == 0xc0 || seg.marker[1] == 0xc2) {
             printf("Segment %02x %02x : ", seg.marker[0], seg.marker[1]);
             for (int i = 0; i < seg.length - 2; i++) printf("%02x ", seg.data[i]);
             printf("\n");
-            *(reinterpret_cast<uint8_t *>(&image.height) + 1) = seg.data[3];
-            *(reinterpret_cast<uint8_t *>(&image.height) + 0) = seg.data[4];
-            *(reinterpret_cast<uint8_t *>(&image.width) + 1) = seg.data[5];
-            *(reinterpret_cast<uint8_t *>(&image.width) + 0) = seg.data[6];
+            image.height = (seg.data[3] << 8) | seg.data[4];
+            image.width = (seg.data[5] << 8) | seg.data[6];
+            image.num_components = seg.data[7];
         }
 
         if (seg.marker[1] == 0xc2) {
             printf("Warning: Progressive JPEG may not be decoded");
         }
     }
-    printf("Image size %d x %d\n", image.width, image.height);
+    printf("Image size %d x %d, %d\n", image.width, image.height, image.num_components);
 
     return image;
 }
@@ -131,7 +130,8 @@ void save_decoded_image(amf::AMFDataPtr data)
 {
     auto mem_type = data->GetMemoryType();
     if (mem_type == amf::AMF_MEMORY_HOST) printf("memory type AMF_MEMORY_HOST\n");
-    if (mem_type == amf::AMF_MEMORY_DX9) printf("memory type AMF_MEMORY_DX9\n");
+    else if (mem_type == amf::AMF_MEMORY_DX9) printf("memory type AMF_MEMORY_DX9\n");
+    else if (mem_type == amf::AMF_MEMORY_DX11) printf("memory type AMF_MEMORY_DX11\n");
     else printf("memory type %d\n", mem_type);
 
     auto res = data->Convert(amf::AMF_MEMORY_HOST);
@@ -186,6 +186,9 @@ int main(int argc, char** argv)
     if (image.width == 0 || image.height == 0) {
         wprintf(L"Failed to detect image size\n"); return 1;
     }
+    if (image.num_components == 0) {
+        wprintf(L"Failed to detect the number of components\n"); return 1;
+    }
 
     AMF_RESULT res;
     amf::AMFContextPtr context;
@@ -198,11 +201,25 @@ int main(int argc, char** argv)
     // Initialize decoder
     res = g_AMFFactory.Init();
     if (res != AMF_OK) { wprintf(L"AMF Failed to initialize\n"); goto terminate; }
+
+    auto trace_level = AMF_TRACE_TRACE;
+    g_AMFFactory.GetDebug()->EnablePerformanceMonitor(true);
+    g_AMFFactory.GetDebug()->AssertsEnable(true);
+    g_AMFFactory.GetTrace()->SetGlobalLevel(trace_level);
+    g_AMFFactory.GetTrace()->TraceEnableAsync(true);
+    g_AMFFactory.GetTrace()->SetWriterLevel(AMF_TRACE_WRITER_CONSOLE, trace_level);
+    g_AMFFactory.GetTrace()->EnableWriter(AMF_TRACE_WRITER_CONSOLE, true);
+    g_AMFFactory.GetTrace()->SetWriterLevel(AMF_TRACE_WRITER_DEBUG_OUTPUT, trace_level);
+    g_AMFFactory.GetTrace()->EnableWriter(AMF_TRACE_WRITER_DEBUG_OUTPUT, true);
+
     res = g_AMFFactory.GetFactory()->CreateContext(&context);
     if (res != AMF_OK) { wprintf(L"AMF Failed to create context\n"); goto terminate; }
+    res = context->InitDX11(NULL);
+    if (res != AMF_OK) { throw std::runtime_error("AMF Failed to initialize DX11"); }
     res = g_AMFFactory.GetFactory()->CreateComponent(context, AMFVideoDecoderUVD_MJPEG, &component);
     if (res != AMF_OK) { wprintf(L"AMF Failed to create component\n"); goto terminate; }
     res = component->Init(amf::AMF_SURFACE_NV12, image.width, image.height);
+    //res = component->Init(amf::AMF_SURFACE_YUY2, image.width, image.height);
     if (res != AMF_OK) { wprintf(L"AMF Failed to init component\n"); goto terminate; }
 
     // Check capabilities

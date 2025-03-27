@@ -1,6 +1,7 @@
+#pragma once
 #include "public/common/AMFFactory.h"
 
-void print(amf::AMF_ACCELERATION_TYPE accel_type)
+inline void print(amf::AMF_ACCELERATION_TYPE accel_type)
 {
     switch(accel_type) {
     case amf::AMF_ACCEL_NOT_SUPPORTED: printf("AMF_ACCEL_NOT_SUPPORTED\n"); break;
@@ -11,7 +12,7 @@ void print(amf::AMF_ACCELERATION_TYPE accel_type)
     }
 }
 
-void print(AMF_RESULT result)
+inline void print(AMF_RESULT result)
 {
     switch (result) {
         case AMF_OK: printf("AMF_OK\n"); break;
