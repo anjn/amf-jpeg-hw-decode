@@ -42,12 +42,38 @@ struct amf_mjpeg_decoder {
         // Initialize decoder
         AMF_RESULT res = g_AMFFactory.Init();
         if (res != AMF_OK) { throw std::runtime_error("AMF Failed to initialize"); }
+
+        // Debug setting
+#ifdef AMF_LOGLEVEL_TRACE
+        auto trace_level = AMF_TRACE_TRACE;
+#else
+        auto trace_level = AMF_TRACE_INFO;
+#endif
+        g_AMFFactory.GetDebug()->EnablePerformanceMonitor(true);
+        g_AMFFactory.GetDebug()->AssertsEnable(true);
+        g_AMFFactory.GetTrace()->SetGlobalLevel(trace_level);
+        g_AMFFactory.GetTrace()->TraceEnableAsync(true);
+        g_AMFFactory.GetTrace()->SetWriterLevel(AMF_TRACE_WRITER_CONSOLE, trace_level);
+        g_AMFFactory.GetTrace()->EnableWriter(AMF_TRACE_WRITER_CONSOLE, true);
+        g_AMFFactory.GetTrace()->SetWriterLevel(AMF_TRACE_WRITER_DEBUG_OUTPUT, trace_level);
+        g_AMFFactory.GetTrace()->EnableWriter(AMF_TRACE_WRITER_DEBUG_OUTPUT, true);
+
         res = g_AMFFactory.GetFactory()->CreateContext(&context);
         if (res != AMF_OK) { throw std::runtime_error("AMF Failed to create context"); }
+        res = context->InitDX11(NULL);
+        if (res != AMF_OK) { throw std::runtime_error("AMF Failed to initialize DX11"); }
         res = g_AMFFactory.GetFactory()->CreateComponent(context, AMFVideoDecoderUVD_MJPEG, &component);
         if (res != AMF_OK) { throw std::runtime_error("AMF Failed to create component"); }
         res = component->Init(amf::AMF_SURFACE_NV12, width, height);
         if (res != AMF_OK) { throw std::runtime_error("AMF Failed to init component"); }
+
+        amf::AMFVariant var;
+        component->GetProperty(AMF_VIDEO_DECODER_ALLOC_SIZE, &var);
+        printf("AMF_VIDEO_DECODER_ALLOC_SIZE : %d x %d\n", var.ToSize().width, var.ToSize().height);
+        component->GetProperty(AMF_VIDEO_DECODER_CURRENT_SIZE, &var);
+        printf("AMF_VIDEO_DECODER_CURRENT_SIZE : %d x %d\n", var.ToSize().width, var.ToSize().height);
+        component->GetProperty(AMF_VIDEO_DECODER_CAP_NUM_OF_STREAMS, &var);
+        printf("AMF_VIDEO_DECODER_CAP_NUM_OF_STREAMS : %lld\n", var.ToInt64());
     }
 
     void check_caps() {
@@ -59,6 +85,7 @@ struct amf_mjpeg_decoder {
         caps->GetInputCaps(&iocaps);
         auto accel_type = caps->GetAccelerationType();
         printf("Acceleration type : "); amf_print(accel_type);
+
         int min_width, max_width, min_height, max_height;
         iocaps->GetWidthRange(&min_width, &max_width);
         iocaps->GetHeightRange(&min_height, &max_height);
@@ -79,6 +106,8 @@ inline void copy_plane(amf::AMFPlanePtr plane, uint8_t* dst)
     int width = plane->GetWidth();
     int pitch_h = plane->GetHPitch();
 
+    printf("%d %d, %d, %d %d, %d\n", offset_x, offset_y, pixel_size, height, width, pitch_h);
+
     for (int y = 0; y < height; y++) {
         int size = pixel_size * width;
         memcpy(dst, src + pitch_h * (offset_y + y) + pixel_size * offset_x, size);
@@ -90,7 +119,8 @@ inline std::vector<uint8_t> get_decoded_image(amf::AMFDataPtr data)
 {
     auto mem_type = data->GetMemoryType();
     if (mem_type == amf::AMF_MEMORY_HOST) printf("memory type AMF_MEMORY_HOST\n");
-    if (mem_type == amf::AMF_MEMORY_DX9) printf("memory type AMF_MEMORY_DX9\n");
+    else if (mem_type == amf::AMF_MEMORY_DX9) printf("memory type AMF_MEMORY_DX9\n");
+    else if (mem_type == amf::AMF_MEMORY_DX11) printf("memory type AMF_MEMORY_DX11\n");
     else printf("memory type %d\n", mem_type);
 
     auto res = data->Convert(amf::AMF_MEMORY_HOST);

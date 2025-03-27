@@ -166,6 +166,7 @@ struct jpeg_image {
     std::size_t data_offset;       // Offset to the image data
     std::size_t eoi_offset;        // Offset to the End Of Image marker
     uint16_t width, height;        // Image dimensions
+    uint8_t num_components;
 };
 
 /**
@@ -205,7 +206,7 @@ inline jpeg_image parse_jpeg(const std::vector<unsigned char>& data)
     }
 
     // Get image size from SOF segments
-    image.width = image.height = 0;
+    image.width = image.height = image.num_components = 0;
     for (const auto& seg : image.segments) {
         // Find Start Of Frame segments
         if (seg.marker[1] == jpeg_utils::markers::SOF0 || 
@@ -222,6 +223,10 @@ inline jpeg_image parse_jpeg(const std::vector<unsigned char>& data)
             if (seg.data.size() >= 5) {
                 image.height = jpeg_utils::read_be16<uint16_t>(&seg.data[1]);
                 image.width = jpeg_utils::read_be16<uint16_t>(&seg.data[3]);
+            }
+
+            if (seg.data.size() >= 6) {
+                image.num_components = seg.data[5];
             }
         }
 

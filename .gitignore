@@ -1,5 +1,7 @@
 /build
 *.mjpeg
+*.mjpg
 *.jpeg
 *.jpg
 *.nv12
+*.pdb

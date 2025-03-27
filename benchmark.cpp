@@ -41,6 +41,9 @@ int main(int argc, char** argv)
     if (image.width == 0 || image.height == 0) {
         wprintf(L"Failed to detect image size\n"); return 1;
     }
+    if (image.num_components == 0) {
+        wprintf(L"Failed to detect the number of components\n"); return 1;
+    }
 
     // Initialize decoder
     amf_mjpeg_decoder decoder;
@@ -85,7 +88,7 @@ int main(int argc, char** argv)
 
     for (int i = 0; i < num_input; i++) {
         while (true) {
-            if (i - num_decode > 2) {
+            if (i - num_decode > 4) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(5));
                 continue;
             }

@@ -8,6 +8,7 @@
 #include "public/include/components/VideoDecoderUVD.h" // AMFVideoDecoderUVD_MJPEG
 #include "public/common/AMFFactory.h"
 
+#define AMF_LOGLEVEL_TRACE
 #include "amf_utils.hpp"
 #include "jpeg_utils.hpp"
 
@@ -40,40 +41,48 @@ int main(int argc, char** argv)
     if (image.width == 0 || image.height == 0) {
         wprintf(L"Failed to detect image size\n"); return 1;
     }
-
-    // Initialize decoder
-    amf_mjpeg_decoder decoder;
-    try {
-        decoder.init(image.width, image.height);
-    } catch (const std::exception &e) {
-        wprintf(L"Failed to init decoder : %hs\n", e.what()); return 1;
+    if (image.num_components == 0) {
+        wprintf(L"Failed to detect the number of components\n"); return 1;
     }
 
-    AMF_RESULT res;
-    amf::AMFBufferPtr buffer;
-    amf::AMFDataPtr data;
+    try {
+        // Initialize decoder
+        amf_mjpeg_decoder decoder;
+        try {
+            decoder.init(image.width, image.height);
+        } catch (const std::exception &e) {
+            wprintf(L"Failed to init decoder : %hs\n", e.what()); return 1;
+        }
 
-    // Allocate buffer
-    auto image_size = image.eoi_offset + 2;
-    res = decoder.context->AllocBuffer(amf::AMF_MEMORY_HOST, image_size, &buffer);
-    printf("Allocated %zd bytes buffer : ", image_size); amf_print(res);
-    // Copy JPEG data
-    memcpy(buffer->GetNative(), filedata.data(), image_size);
+        AMF_RESULT res;
+        amf::AMFBufferPtr buffer;
+        amf::AMFDataPtr data;
 
-    // Submit to decoder
-    res = decoder.component->SubmitInput(buffer.Detach());
-    printf("AMF SubmitInput returned "); amf_print(res);
-    if (res != AMF_OK) return 1;
+        // Allocate buffer
+        auto image_size = image.eoi_offset + 2;
+        res = decoder.context->AllocBuffer(amf::AMF_MEMORY_HOST, image_size, &buffer);
+        printf("Allocated %zd bytes buffer : ", image_size); amf_print(res);
+        // Copy JPEG data
+        memcpy(buffer->GetNative(), filedata.data(), image_size);
 
-    // Query output
-    res = decoder.component->QueryOutput(&data);
-    printf("AMF QueryOutput returned "); amf_print(res);
-    if (res != AMF_OK) return 1;
+        // Submit to decoder
+        res = decoder.component->SubmitInput(buffer.Detach());
+        printf("AMF SubmitInput returned "); amf_print(res);
+        if (res != AMF_OK) return 1;
 
-    // Save decoded image to a file
-    auto img_dec = get_decoded_image(data);
-    std::ofstream ofs("output.nv12", std::ios::binary);
-    if (!ofs) { printf("Failed to open file!\n"); return 1; }
-    ofs.write(reinterpret_cast<char*>(img_dec.data()), img_dec.size());
-    ofs.close();
+        // Query output
+        res = decoder.component->QueryOutput(&data);
+        printf("AMF QueryOutput returned "); amf_print(res);
+        if (res != AMF_OK) return 1;
+
+        // Save decoded image to a file
+        auto img_dec = get_decoded_image(data);
+        std::ofstream ofs("output.nv12", std::ios::binary);
+        if (!ofs) { printf("Failed to open file!\n"); return 1; }
+        ofs.write(reinterpret_cast<char*>(img_dec.data()), img_dec.size());
+        ofs.close();
+        
+    } catch (std::exception& e) {
+        wprintf(L"Exception was thrown during decoding : %hs\n", e.what()); return 1;
+    }
 }
